@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">通知流体云</string>
+    <string name="app_system">%1$s · 系统应用</string>
+    <string name="app_unavailable">%1$s · 未安装或不可见</string>
+    <string name="percent_value">%1$d%%</string>
+</resources>
