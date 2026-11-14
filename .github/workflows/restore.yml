@@ -1,0 +1,26 @@
+name: restore-sources
+on:
+  push:
+    paths:
+      - '.github/workflows/restore.yml'
+permissions:
+  contents: write
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unpack archive
+        run: |
+          python3 -c 'import base64,pathlib;fix={3:3520,5:896};raw=["".join(pathlib.Path(".mika/c%02d.b64"%i).read_text().split()) for i in range(1,13)];s="".join((x[:fix[i]]+x[fix[i]+1:]) if i in fix else x for i,x in enumerate(raw,1));open("/tmp/src.tar.xz","wb").write(base64.b64decode(s));print("base64 chars",len(s))'
+          tar -xJf /tmp/src.tar.xz -C .
+          ls -l app/src/main/java/io/github/fluidnotify | head -20
+      - name: Commit unpacked sources
+        run: |
+          git config user.name "mika-bot"
+          git config user.email "mika-bot@users.noreply.github.com"
+          rm -rf .mika
+          rm -f .github/workflows/restore.yml
+          git add -A
+          git commit -m "Add remaining rebuilt sources (12 files)"
+          git push
