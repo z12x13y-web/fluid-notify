@@ -1,0 +1,51 @@
+uniform float2 resolution;
+uniform float4 lens;
+uniform float radius;
+uniform float density;
+uniform float2 light;
+
+uniform shader scenery;
+
+// Sample the cached background in window-local coordinates. Only the lens moves.
+half3 scene(float2 p) { return scenery.eval(p).rgb; }
+
+float roundedDistance(float2 p, float2 halfSize, float r) {
+    float2 q = abs(p) - halfSize + r;
+    return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
+}
+
+half4 main(float2 p) {
+    float2 center = (lens.xy + lens.zw) * .5;
+    float2 halfSize = (lens.zw - lens.xy) * .5;
+    float2 local = p - center;
+    float sdf = roundedDistance(local, halfSize, radius);
+    half3 background = scene(p);
+    float shadowDistance = roundedDistance(local - float2(0.0, 7.0 * density), halfSize, radius);
+    float shadow = exp(-max(shadowDistance, 0.0) / (9.0 * density)) * .14;
+    background *= 1.0 - shadow * smoothstep(-density, density, sdf);
+    if (sdf > density) return half4(background, 1.0);
+
+    float2 q = abs(local) - halfSize + radius;
+    float2 normal = normalize(max(q, .001)) * sign(local);
+    if (max(q.x, q.y) < 0.0) {
+        normal = q.x > q.y ? float2(sign(local.x), 0.0) : float2(0.0, sign(local.y));
+    }
+    float depth = max(-sdf, 0.0) / density;
+    float bevel = exp(-depth / 7.0);
+    float2 samplePoint = center + local * .965 - normal * (12.0 * density * bevel);
+    // A low-cost four-tap frost softens the scene without blurring text or borders.
+    float2 blur = float2(1.1 * density, 0.0);
+    half3 transmitted = (scene(samplePoint + blur) + scene(samplePoint - blur)
+                      + scene(samplePoint + blur.yx) + scene(samplePoint - blur.yx)) * .25;
+    transmitted.r = mix(transmitted.r, scene(samplePoint - normal * density * 1.4).r, bevel);
+    transmitted.b = mix(transmitted.b, scene(samplePoint + normal * density * 1.4).b, bevel);
+    half3 glass = mix(transmitted, half3(.98, 1.0, 1.0), .25);
+    float shine = pow(max(0.0, dot(normal, normalize(float2(-.65, -.8)))), 3.0);
+    float rim = exp(-depth / .85);
+    glass += half3(1.0) * (rim * (.18 + shine * .57));
+    glass -= half3(.10, .16, .18) * bevel * (1.0 - shine) * .33;
+    float2 spot = (p - light) / (120.0 * density);
+    glass += half3(1.0) * exp(-dot(spot, spot) * 2.0) * .09;
+    float inside = 1.0 - smoothstep(-.7 * density, .7 * density, sdf);
+    return half4(mix(background, clamp(glass, 0.0, 1.0), inside), 1.0);
+}
